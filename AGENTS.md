@@ -18,9 +18,20 @@ Sample app requires a flavor name:
 ./gradlew :sample:kotlin:assembleUs1Debug   # us1 is the default flavor
 ```
 
-Code formatting (requires `ktlint` installed):
+Code formatting:
 ```bash
-ktlint -F "**/*.kt" "**/*.kts" '!**/build/generated/**' '!**/build/kspCaches/**'
+./gradlew ktlintFormatAll
+
+# alternatively per module
+./gradlew <module_name>:ktlintFormat
+```
+
+Detekt checks:
+```bash
+./gradlew detekt
+
+# alternatively per module
+./gradlew <module_name>:detekt
 ```
 
 # API Surface Files
@@ -91,7 +102,7 @@ Shared factories: `forge.useCoreFactories()` (from `dd-sdk-android-core` testFix
 
 # Sample App Config
 
-The sample app reads credentials from gitignored JSON files in `config/`. Missing files don't break the build (empty strings are used), but the app won't send data to Datadog. Schema (from `buildSrc/.../SampleAppConfig.kt`):
+The sample app reads credentials from gitignored JSON files in `config/`. Missing files don't break the build (empty strings are used), but the app won't send data to Datadog. Schema (from `build-logic/.../SampleAppConfig.kt`):
 
 ```json
 {
@@ -102,7 +113,8 @@ The sample app reads credentials from gitignored JSON files in `config/`. Missin
   "logsEndpoint": "",
   "tracesEndpoint": "",
   "rumEndpoint": "",
-  "sessionReplayEndpoint": ""
+  "sessionReplayEndpoint": "",
+  "remoteConfigurationId": ""
 }
 ```
 
@@ -110,7 +122,7 @@ Filename matches the flavor: `config/us1.json`, `config/staging.json`, etc. Get 
 
 # Generated Models
 
-Some modules generate Kotlin data classes from JSON schemas at build time (e.g. `features/dd-sdk-android-rum/src/main/json/`). The generated Kotlin files land in `build/generated/json2kotlin/` — **do not edit them directly**. Edit the JSON schemas instead and rebuild.
+Some modules generate Kotlin data classes from JSON schemas at build time (e.g. `features/dd-sdk-android-rum/src/main/json/`). The generated Kotlin files land in `build/generated/<generationTaskName>/` — **do not edit them directly**. Edit the JSON schemas instead and rebuild.
 
 # Commits
 
