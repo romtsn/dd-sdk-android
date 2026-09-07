@@ -4,7 +4,7 @@
  * Copyright 2016-Present Datadog, Inc.
  */
 
-package com.datadog.android.profiling.internal.anr
+package com.datadog.android.profiling.internal.trigger
 
 import android.content.Context
 import android.os.Build
@@ -14,6 +14,8 @@ import android.os.ProfilingTrigger
 import androidx.annotation.RequiresApi
 import com.datadog.android.api.InternalLogger
 import com.datadog.android.internal.time.TimeProvider
+import com.datadog.android.profiling.internal.ProfilingStartReason
+import com.datadog.android.profiling.internal.perfetto.PerfettoResult
 import com.datadog.android.profiling.internal.telemetry.ProfilingTelemetry
 import com.datadog.android.profiling.internal.telemetry.ProfilingTelemetryEvent
 import com.datadog.android.profiling.internal.utils.ThreadDumper
@@ -25,15 +27,15 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.function.Consumer
 
 /**
- * BAKLAVA+ implementation of [AnrTriggerRegistrar] backed by the system
+ * BAKLAVA+ implementation of [ProfilingTriggerRegistrar] backed by the system
  * [ProfilingManager.addProfilingTriggers] /
  * [ProfilingManager.registerForAllProfilingResults] APIs.
  */
-internal class AnrProfilingTriggerRegistrar(
+internal class ProfilingManagerTriggerRegistrar(
     private val timeProvider: TimeProvider,
     private val executorService: ExecutorService,
     private val profilingTelemetry: ProfilingTelemetry
-) : AnrTriggerRegistrar {
+) : ProfilingTriggerRegistrar {
 
     @Volatile
     internal var threadDumper: ThreadDumper = ThreadDumper()
@@ -48,7 +50,7 @@ internal class AnrProfilingTriggerRegistrar(
     private val registered = AtomicBoolean(false)
 
     @Volatile
-    private var listener: AnrListener? = null
+    private var listener: ProfilingTriggerListener? = null
 
     // Testable seam
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
@@ -63,7 +65,7 @@ internal class AnrProfilingTriggerRegistrar(
 
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     @Suppress("ReturnCount")
-    override fun register(appContext: Context, listener: AnrListener) {
+    override fun register(appContext: Context, listener: ProfilingTriggerListener) {
         if (registered.get()) return
 
         val manager = appContext.getSystemService(ProfilingManager::class.java)
@@ -123,14 +125,14 @@ internal class AnrProfilingTriggerRegistrar(
             if (creationTimeMs != null) {
                 val delayMs = detectedAtMs - creationTimeMs
                 callbackDelayMs = delayMs
-                if (delayMs > MAX_CALLBACK_DELAY_MS) {
-                    droppedAsStale = true
-                } else {
-                    currentListener.onAnrDetected(threadDumper.dump(detectedAtMs))
-                }
+                droppedAsStale = delayMs > MAX_CALLBACK_DELAY_MS
             }
-            // We currently don't use the result profile, just delete it.
-            safeDelete(resultPath)
+            if (callbackDelayMs != null && !droppedAsStale) {
+                forwardTriggerResult(currentListener, detectedAtMs, resultPath)
+            } else {
+                // Not forwarded (stale, or could not compute staleness): delete to avoid leaking.
+                safeDelete(resultPath)
+            }
         }
         profilingTelemetry.report(
             ProfilingTelemetryEvent.AnrTriggerResult(
@@ -140,6 +142,23 @@ internal class AnrProfilingTriggerRegistrar(
                 callbackDelayMs = callbackDelayMs,
                 clientClockDriftMs = timeProvider.getServerOffsetMillis(),
                 droppedAsStale = droppedAsStale
+            )
+        )
+    }
+
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
+    private fun forwardTriggerResult(
+        listener: ProfilingTriggerListener,
+        detectedAtMs: Long,
+        resultPath: String
+    ) {
+        listener.onAnrDetected(
+            event = threadDumper.dump(detectedAtMs),
+            result = PerfettoResult(
+                start = detectedAtMs,
+                startReason = ProfilingStartReason.ANR,
+                end = detectedAtMs,
+                resultFilePath = resultPath
             )
         )
     }

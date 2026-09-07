@@ -34,7 +34,6 @@ import com.datadog.android.profiling.internal.ProfilingRequestFactory
 import com.datadog.android.profiling.internal.ProfilingStartReason
 import com.datadog.android.profiling.internal.ProfilingStorage
 import com.datadog.android.profiling.internal.ProfilingWriter
-import com.datadog.android.profiling.internal.anr.AnrTriggerRegistrar
 import com.datadog.android.profiling.internal.perfetto.PerfettoProfiler
 import com.datadog.android.profiling.internal.perfetto.PerfettoResult
 import com.datadog.android.profiling.internal.quota.NoOpQuotaChecker
@@ -44,6 +43,9 @@ import com.datadog.android.profiling.internal.quota.QuotaResult
 import com.datadog.android.profiling.internal.telemetry.ProfilingTelemetry
 import com.datadog.android.profiling.internal.telemetry.ProfilingTelemetryEvent
 import com.datadog.android.profiling.internal.time.MutableTimeProvider
+import com.datadog.android.profiling.internal.trigger.NoOpPendingTriggerProfiles
+import com.datadog.android.profiling.internal.trigger.PendingTriggerProfiles
+import com.datadog.android.profiling.internal.trigger.ProfilingTriggerRegistrar
 import com.datadog.android.profiling.utils.config.MainLooperTestConfiguration
 import com.datadog.tools.unit.annotations.TestConfigurationsProvider
 import com.datadog.tools.unit.extensions.TestConfigurationExtension
@@ -151,10 +153,13 @@ internal class ProfilingFeatureTest {
     private lateinit var mockPackageManager: PackageManager
 
     @Mock
-    private lateinit var mockAnrTriggerRegistrar: AnrTriggerRegistrar
+    private lateinit var mockTriggerRegistrar: ProfilingTriggerRegistrar
 
     @Mock
     private lateinit var mockBuildSdkVersionProvider: BuildSdkVersionProvider
+
+    @Mock
+    private lateinit var mockPendingTriggerProfiles: PendingTriggerProfiles
 
     @Forgery
     private lateinit var fakeConfiguration: ProfilingConfiguration
@@ -272,7 +277,7 @@ internal class ProfilingFeatureTest {
             timeProvider = MutableTimeProvider.create(mockTimeProvider),
             scheduledExecutorService = mockSchedulerExecutor,
             profilingTelemetry = ProfilingTelemetry(),
-            anrTriggerRegistrar = mockAnrTriggerRegistrar,
+            triggerRegistrar = mockTriggerRegistrar,
             buildSdkVersionProvider = mockBuildSdkVersionProvider
         )
         val feature = ProfilingFeature(
@@ -302,7 +307,7 @@ internal class ProfilingFeatureTest {
             timeProvider = MutableTimeProvider.create(mockTimeProvider),
             scheduledExecutorService = mockSchedulerExecutor,
             profilingTelemetry = profilingTelemetry,
-            anrTriggerRegistrar = mockAnrTriggerRegistrar,
+            triggerRegistrar = mockTriggerRegistrar,
             buildSdkVersionProvider = mockBuildSdkVersionProvider
         )
         profilingTelemetry.report(
@@ -594,6 +599,20 @@ internal class ProfilingFeatureTest {
     }
 
     @Test
+    fun `M stop and reset pendingTriggerProfiles W onStop()`() {
+        // Given
+        testedFeature.onInitialize(mockContext)
+        testedFeature.pendingTriggerProfiles = mockPendingTriggerProfiles
+
+        // When
+        testedFeature.onStop()
+
+        // Then
+        verify(mockPendingTriggerProfiles).stop()
+        assertThat(testedFeature.pendingTriggerProfiles).isInstanceOf(NoOpPendingTriggerProfiles::class.java)
+    }
+
+    @Test
     fun `M start continuous cycle W profiler result received {TTID session unsampled}`() {
         // Given
         testedFeature = ProfilingFeature(mockSdkCore, fakeAllSampledConfiguration, mockProfiler)
@@ -711,7 +730,7 @@ internal class ProfilingFeatureTest {
         )
 
         // Then
-        verify(mockDataWriter).write(
+        verify(mockDataWriter).writeManualProfile(
             profilingResult = fakePerfettoResult.copy(startReason = ProfilingStartReason.CONTINUOUS),
             longTasks = emptyList(),
             anrEvents = emptyList(),
@@ -763,7 +782,7 @@ internal class ProfilingFeatureTest {
         )
 
         // Then
-        verify(mockDataWriter).write(
+        verify(mockDataWriter).writeManualProfile(
             profilingResult = fakePerfettoResult.copy(startReason = ProfilingStartReason.CONTINUOUS),
             longTasks = listOf(fakeRumLongTaskEvent),
             anrEvents = emptyList(),
@@ -804,7 +823,7 @@ internal class ProfilingFeatureTest {
         )
 
         // Then
-        verify(mockDataWriter).write(
+        verify(mockDataWriter).writeManualProfile(
             profilingResult = fakePerfettoResult.copy(startReason = ProfilingStartReason.CONTINUOUS),
             longTasks = emptyList(),
             anrEvents = listOf(fakeRumAnrEvent),
@@ -872,6 +891,19 @@ internal class ProfilingFeatureTest {
         // Then
         assertThat(testedFeature.pendingRumEvents.pendingLongTasks).isEmpty()
         assertThat(testedFeature.pendingRumEvents.pendingAnrEvents).isEmpty()
+    }
+
+    @Test
+    fun `M forward gating event to pendingTriggerProfiles W onReceive() {RumAnrEvent}`() {
+        // Given
+        testedFeature.onInitialize(mockContext)
+        testedFeature.pendingTriggerProfiles = mockPendingTriggerProfiles
+
+        // When
+        testedFeature.onReceive(fakeRumAnrEvent)
+
+        // Then
+        verify(mockPendingTriggerProfiles).addRumGatingEvent(fakeRumAnrEvent)
     }
 
     @Test
@@ -1146,7 +1178,7 @@ internal class ProfilingFeatureTest {
         )
 
         // Then
-        verify(mockDataWriter).write(
+        verify(mockDataWriter).writeManualProfile(
             profilingResult = fakePerfettoResult.copy(startReason = ProfilingStartReason.APPLICATION_LAUNCH),
             longTasks = listOf(fakeRumLongTaskEvent),
             anrEvents = emptyList(),
@@ -1178,7 +1210,7 @@ internal class ProfilingFeatureTest {
 
         // Then
         verify(mockDataWriter).discard(launchResult)
-        verify(mockDataWriter, never()).write(any(), any(), any(), any())
+        verify(mockDataWriter, never()).writeManualProfile(any(), any(), any(), any())
     }
 
     @Test
@@ -1205,7 +1237,7 @@ internal class ProfilingFeatureTest {
         )
 
         // Then
-        verify(mockDataWriter).write(
+        verify(mockDataWriter).writeManualProfile(
             profilingResult = fakePerfettoResult.copy(startReason = ProfilingStartReason.APPLICATION_LAUNCH),
             longTasks = emptyList(),
             anrEvents = listOf(fakeRumAnrEvent),
@@ -1304,7 +1336,8 @@ internal class ProfilingFeatureTest {
 
     @Test
     fun `M forward ProfilingAnrDetectedEvent to RUM W onAnrDetected() {launch profiling active}`(
-        @Forgery fakeEvent: ProfilingAnrDetectedEvent
+        @Forgery fakeEvent: ProfilingAnrDetectedEvent,
+        @Forgery fakeResult: PerfettoResult
     ) {
         // Given
         testedFeature = ProfilingFeature(mockSdkCore, fakeAllSampledConfiguration, mockProfiler)
@@ -1312,7 +1345,7 @@ internal class ProfilingFeatureTest {
         testedFeature.onInitialize(mockContext)
 
         // When
-        testedFeature.onAnrDetected(fakeEvent)
+        testedFeature.onAnrDetected(fakeEvent, fakeResult)
 
         // Then
         verify(mockRumFeatureScope).sendEvent(fakeEvent)
@@ -1320,7 +1353,8 @@ internal class ProfilingFeatureTest {
 
     @Test
     fun `M drop ProfilingAnrDetectedEvent W onAnrDetected() {profiling inactive}`(
-        @Forgery fakeEvent: ProfilingAnrDetectedEvent
+        @Forgery fakeEvent: ProfilingAnrDetectedEvent,
+        @Forgery fakeResult: PerfettoResult
     ) {
         // Given
         testedFeature = ProfilingFeature(mockSdkCore, fakeAllSampledConfiguration, mockProfiler)
@@ -1328,10 +1362,28 @@ internal class ProfilingFeatureTest {
         testedFeature.onInitialize(mockContext)
 
         // When
-        testedFeature.onAnrDetected(fakeEvent)
+        testedFeature.onAnrDetected(fakeEvent, fakeResult)
 
         // Then
         verify(mockRumFeatureScope, never()).sendEvent(any())
+    }
+
+    @Test
+    fun `M forward profiling result to pendingTriggerProfiles W onAnrDetected()`(
+        @Forgery fakeEvent: ProfilingAnrDetectedEvent,
+        @Forgery fakeResult: PerfettoResult
+    ) {
+        // Given
+        testedFeature = ProfilingFeature(mockSdkCore, fakeAllSampledConfiguration, mockProfiler)
+        whenever(mockProfiler.isRunning()) doReturn false
+        testedFeature.onInitialize(mockContext)
+        testedFeature.pendingTriggerProfiles = mockPendingTriggerProfiles
+
+        // When
+        testedFeature.onAnrDetected(fakeEvent, fakeResult)
+
+        // Then
+        verify(mockPendingTriggerProfiles).addProfilingResult(fakeResult)
     }
 
     @Test
@@ -1476,7 +1528,7 @@ internal class ProfilingFeatureTest {
         )
 
         // Then
-        verify(mockDataWriter, never()).write(
+        verify(mockDataWriter, never()).writeManualProfile(
             profilingResult = any(),
             longTasks = any(),
             anrEvents = any(),
@@ -1508,7 +1560,7 @@ internal class ProfilingFeatureTest {
         )
 
         // Then
-        verify(mockDataWriter).write(
+        verify(mockDataWriter).writeManualProfile(
             profilingResult = fakePerfettoResult.copy(startReason = ProfilingStartReason.APPLICATION_LAUNCH),
             longTasks = listOf(fakeRumLongTaskEvent),
             anrEvents = emptyList(),
@@ -1538,7 +1590,7 @@ internal class ProfilingFeatureTest {
         )
 
         // Then — nothing is written while the quota decision is still pending
-        verify(mockDataWriter, never()).write(
+        verify(mockDataWriter, never()).writeManualProfile(
             profilingResult = any(),
             longTasks = any(),
             anrEvents = any(),
@@ -1549,7 +1601,7 @@ internal class ProfilingFeatureTest {
         testedFeature.simulateQuotaAllowed()
 
         // Then — the buffered launch event is now written
-        verify(mockDataWriter).write(
+        verify(mockDataWriter).writeManualProfile(
             profilingResult = fakePerfettoResult.copy(startReason = ProfilingStartReason.APPLICATION_LAUNCH),
             longTasks = listOf(fakeRumLongTaskEvent),
             anrEvents = emptyList(),

@@ -4,10 +4,11 @@
  * Copyright 2016-Present Datadog, Inc.
  */
 
-package com.datadog.android.profiling.internal.anr
+package com.datadog.android.profiling.internal.trigger
 
 import com.datadog.android.internal.profiling.ProfilingAnrDetectedEvent
+import com.datadog.android.profiling.internal.perfetto.PerfettoResult
 
-internal fun interface AnrListener {
-    fun onAnrDetected(event: ProfilingAnrDetectedEvent)
+internal fun interface ProfilingTriggerListener {
+    fun onAnrDetected(event: ProfilingAnrDetectedEvent, result: PerfettoResult)
 }
