@@ -223,7 +223,6 @@ internal class PerfettoProfilerTest {
                 "start_reason" to ProfilingStartReason.APPLICATION_LAUNCH.value,
                 "duration" to fakeDuration,
                 "callback_delay_ms" to 0L,
-                "client_clock_drift_ms" to 0L,
                 "file_size" to 0L,
                 "stopped_reason" to "timeout",
                 "app_start_info" to null
@@ -286,7 +285,6 @@ internal class PerfettoProfilerTest {
                 "start_reason" to ProfilingStartReason.APPLICATION_LAUNCH.value,
                 "duration" to fakeDuration,
                 "callback_delay_ms" to 0L,
-                "client_clock_drift_ms" to 0L,
                 "error_message" to fakeErrorMessage,
                 "file_size" to 0L,
                 "stopped_reason" to "error",
@@ -351,7 +349,6 @@ internal class PerfettoProfilerTest {
                 "start_reason" to ProfilingStartReason.APPLICATION_LAUNCH.value,
                 "duration" to fakeDuration,
                 "callback_delay_ms" to 0L,
-                "client_clock_drift_ms" to 0L,
                 "error_message" to fakeErrorMessage,
                 "file_size" to 0L,
                 "stopped_reason" to "error",
@@ -701,7 +698,6 @@ internal class PerfettoProfilerTest {
                 "start_reason" to ProfilingStartReason.APPLICATION_LAUNCH.value,
                 "duration" to fakeDuration,
                 "callback_delay_ms" to 0L,
-                "client_clock_drift_ms" to 0L,
                 "error_message" to null,
                 "file_size" to 0L,
                 "stopped_reason" to "timeout",
@@ -767,7 +763,6 @@ internal class PerfettoProfilerTest {
                 "start_reason" to startReason.value,
                 "duration" to fakeDuration,
                 "callback_delay_ms" to 0L,
-                "client_clock_drift_ms" to 0L,
                 "error_message" to null,
                 "file_size" to 0L,
                 "stopped_reason" to "timeout",
@@ -836,7 +831,6 @@ internal class PerfettoProfilerTest {
                 "start_reason" to ProfilingStartReason.APPLICATION_LAUNCH.value,
                 "duration" to fakeStopDelta,
                 "callback_delay_ms" to fakeCallbackDelta,
-                "client_clock_drift_ms" to 0L,
                 "file_size" to 0L,
                 "stopped_reason" to "manual",
                 "app_start_info" to null
@@ -929,7 +923,6 @@ internal class PerfettoProfilerTest {
                 "start_reason" to ProfilingStartReason.CONTINUOUS.value,
                 "duration" to fakeDuration2,
                 "callback_delay_ms" to 0L,
-                "client_clock_drift_ms" to 0L,
                 "file_size" to 0L,
                 "stopped_reason" to "timeout",
                 "app_start_info" to null
@@ -1082,6 +1075,32 @@ internal class PerfettoProfilerTest {
 
         // Then
         verify(mockRegistrar, never()).register(any(), any())
+    }
+
+    @Test
+    fun `M not delegate to registrar W registerProfilingCallback {ANR trigger disabled}`() {
+        // Given
+        // Drop interactions recorded by the set-up call (which used the default enabled state).
+        reset(mockRegistrar)
+        testedProfiler.setAnrTriggerEnabled(false)
+
+        // When
+        testedProfiler.registerProfilingCallback(mockContext, mockProfilerCallback)
+
+        // Then
+        verify(mockRegistrar, never()).register(any(), any())
+    }
+
+    @Test
+    fun `M not delegate to registrar W unregisterProfilingCallback {ANR trigger disabled}`() {
+        // Given
+        testedProfiler.setAnrTriggerEnabled(false)
+
+        // When
+        testedProfiler.unregisterProfilingCallback(mockContext)
+
+        // Then
+        verify(mockRegistrar, never()).unregister(any())
     }
 
     @Test
