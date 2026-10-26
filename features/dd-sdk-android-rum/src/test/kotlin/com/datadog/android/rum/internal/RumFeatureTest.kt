@@ -27,7 +27,6 @@ import com.datadog.android.internal.system.BuildSdkVersionProvider
 import com.datadog.android.internal.telemetry.InternalTelemetryEvent
 import com.datadog.android.internal.utils.asString
 import com.datadog.android.internal.utils.loggableStackTrace
-import com.datadog.android.rum.ExperimentalRumApi
 import com.datadog.android.rum.GlobalRumMonitor
 import com.datadog.android.rum.RumAttributes
 import com.datadog.android.rum.RumErrorSource
@@ -52,6 +51,7 @@ import com.datadog.android.rum.internal.monitor.DatadogRumMonitor
 import com.datadog.android.rum.internal.monitor.NoOpAdvancedRumMonitor
 import com.datadog.android.rum.internal.startup.RumAppStartupDetector
 import com.datadog.android.rum.internal.thread.NoOpScheduledExecutorService
+import com.datadog.android.rum.internal.timeseries.CollectedTimeseriesSessionRegistry
 import com.datadog.android.rum.internal.timeseries.NoOpTimeseriesCollector
 import com.datadog.android.rum.internal.timeseries.PipelineFactory
 import com.datadog.android.rum.internal.timeseries.TimeseriesCollector
@@ -878,7 +878,6 @@ internal class RumFeatureTest {
     }
 
     @Test
-    @OptIn(ExperimentalRumApi::class)
     fun `M wire timeseries factory W initialize { timeseries enabled }`(
         @LongForgery(min = 1L) fakeTotalRamBytes: Long,
         @IntForgery(min = 2, max = 128) fakeBufferSize: Int,
@@ -889,7 +888,8 @@ internal class RumFeatureTest {
             timeseriesConfiguration = TimeseriesConfiguration(
                 TimeseriesConfiguration.DEFAULT.collectTypes,
                 bufferSize = fakeBufferSize,
-                intervalMs = fakeIntervalMs
+                samplingIntervalMs = fakeIntervalMs,
+                viewTransitionDelayMs = TimeseriesConfiguration.BACKGROUND_TRANSITION_DELAY_MS
             )
         )
         testedFeature = RumFeature(
@@ -919,14 +919,18 @@ internal class RumFeatureTest {
             looper.getFieldValue<ScheduledExecutorService, Looper>("scheduledExecutorService")
         ).isSameAs(testedFeature.vitalExecutorService)
 
+        val sessionRegistry = timeseriesCollector
+            .getFieldValue<CollectedTimeseriesSessionRegistry, DefaultTimeseriesCollector>("sessionRegistry")
+
         val pipelinesFactory = timeseriesCollector
             .getFieldValue<PipelineFactory, DefaultTimeseriesCollector>("pipelinesFactory")
+        assertThat(
+            pipelinesFactory.getFieldValue<CollectedTimeseriesSessionRegistry, PipelineFactory>("sessionRegistry")
+        ).isSameAs(sessionRegistry)
+        assertThat(pipelinesFactory.getFieldValue<InsightsCollector, PipelineFactory>("insightsCollector"))
+            .isSameAs(testedFeature.insightsCollector)
         assertThat(pipelinesFactory.getFieldValue<DataWriter<*>, PipelineFactory>("dataWriter"))
             .isSameAs(testedFeature.dataWriter)
-        assertThat(
-            pipelinesFactory.getFieldValue<InsightsCollector, PipelineFactory>("insightsCollector")
-        )
-            .isSameAs(testedFeature.insightsCollector)
         assertThat(pipelinesFactory.getFieldValue<Long, PipelineFactory>("totalRamBytes"))
             .isEqualTo(fakeTotalRamBytes)
         assertThat(pipelinesFactory.getFieldValue<TimeseriesConfiguration, PipelineFactory>("configuration"))
@@ -942,7 +946,6 @@ internal class RumFeatureTest {
     }
 
     @Test
-    @OptIn(ExperimentalRumApi::class)
     fun `M not wire timeseries factory and warn W initialize { timeseries enabled, non-Application context }`() {
         // Given
         fakeConfiguration = fakeConfiguration.copy(
@@ -1058,7 +1061,6 @@ internal class RumFeatureTest {
     }
 
     @Test
-    @OptIn(ExperimentalRumApi::class)
     fun `M initialize vital executor W initialize { frequency = NEVER and timeseries enabled }`() {
         // Given
         fakeConfiguration = fakeConfiguration.copy(
