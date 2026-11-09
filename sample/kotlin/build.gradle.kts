@@ -148,6 +148,8 @@ androidComponents {
 
 datadog {
     composeInstrumentation = InstrumentationMode.AUTO
+    // since the upload job is on Gitlab, default url will be different
+    remoteRepositoryUrl = "https://github.com/DataDog/dd-sdk-android"
     variants {
         SAMPLE_APP_REGIONS.forEach {
             register(it) {
@@ -262,4 +264,10 @@ taskConfig<KotlinCompile> {
     compilerOptions {
         optIn.add("kotlin.RequiresOptIn")
     }
+}
+
+tasks.register("lintRelease") {
+    group = "verification"
+    description = "Runs release lint on the US1 sample flavor."
+    dependsOn("lintUs1Release")
 }

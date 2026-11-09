@@ -4,8 +4,10 @@
  * Copyright 2016-Present Datadog, Inc.
  */
 
-package com.datadog.benchmark.sample.utils.recycler
+package com.datadog.android.flags.internal.model
 
-internal interface BaseRecyclerViewItem {
-    val key: String
-}
+internal data class PrecomputedAssignments(
+    val flags: Map<String, PrecomputedFlag>,
+    val obfuscation: FlagKeyObfuscation? = null,
+    val observeFullEvaluationData: Boolean = false
+)

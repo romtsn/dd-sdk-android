@@ -45,7 +45,7 @@ stages:
     - export DD_AGENT_HOST="$BUILDENV_HOST_IP"
     - |
       gradle_jvm_args=(
-        "-Xmx4096m"
+        "-Xmx8g"
         "-javaagent:$DD_TRACER_FOLDER/dd-java-agent.jar=$DD_COMMON_AGENT_CONFIG"
       )
 
@@ -255,11 +255,27 @@ test:build-instrumented-apks:
         ./gradlew
         -Puse-api21-java-backport
         -Puse-desugaring
+        :features:dd-sdk-android-flags:assembleRelease
+        :features:dd-sdk-android-flags-openfeature:assembleRelease
+    - mkdir -p build/flags-device-artifacts
+    - cp features/dd-sdk-android-flags/build/outputs/aar/dd-sdk-android-flags-release.aar build/flags-device-artifacts/
+    - cp features/dd-sdk-android-flags-openfeature/build/outputs/aar/dd-sdk-android-flags-openfeature-release.aar build/flags-device-artifacts/
+    - >-
+        ./gradlew
+        -PflagsArtifactDirectory="$CI_PROJECT_DIR/build/flags-device-artifacts"
+        -Puse-api21-java-backport
+        -Puse-desugaring
         :reliability:core-it:assembleDebug
         :reliability:core-it:assembleDebugAndroidTest
         :instrumented:integration:assembleDebug
         :instrumented:integration:assembleDebugAndroidTest
         :features:dd-sdk-android-ndk:assembleDebugAndroidTest
+        :reliability:single-fit:flags:assembleReleaseAndroidTest
+    - >-
+        sha256sum build/flags-device-artifacts/*.aar
+        reliability/single-fit/flags/build/outputs/apk/androidTest/release/*.apk
+        > build/flags-device-artifacts/SHA256SUMS
+    - cat build/flags-device-artifacts/SHA256SUMS
   artifacts:
     expire_in: 1 week
     paths:
@@ -268,6 +284,8 @@ test:build-instrumented-apks:
       - "instrumented/integration/build/outputs/apk/debug/*.apk"
       - "instrumented/integration/build/outputs/apk/androidTest/debug/*.apk"
       - "features/dd-sdk-android-ndk/build/outputs/apk/androidTest/debug/*.apk"
+      - "reliability/single-fit/flags/build/outputs/apk/androidTest/release/*.apk"
+      - "build/flags-device-artifacts/"
 
 test:single-fit-logs:
   extends: .single-fit-job
@@ -343,6 +361,7 @@ test-pyramid:api-coverage:
 test-pyramid:core-it-and-ndk:
   extends: .instrumented-apk-job
   script:
+    - shasum -a 256 -c build/flags-device-artifacts/SHA256SUMS
     - python3 ci/scripts/run_core_it_and_ndk_apks.py
 
 test-pyramid:legacy-integration-instrumented-min-api:
@@ -604,41 +623,9 @@ notify:dogfood-app:
   stage: notify
   when: on_success
   script:
-    - export GITHUB_TOKEN=$(dd-octo-sts token --scope DataDog/datadog-android --policy all.gitlab.pr)
+    - export GITHUB_TOKEN=$(dd-octo-sts token --scope ddoghq/datadog-android --policy all.gitlab.pr)
     - pip3 install GitPython requests
     - python3 ./ci/scripts/dogfood.py -v $CI_COMMIT_TAG -t app
-
-notify:dogfood-demo:
-  tags: [ "arch:amd64" ]
-  interruptible: false
-  only:
-    - tags
-  image: $CI_IMAGE_DOCKER
-  id_tokens:
-    DDOCTOSTS_ID_TOKEN:
-      aud: dd-octo-sts
-  stage: notify
-  when: on_success
-  script:
-    - export GITHUB_TOKEN=$(dd-octo-sts token --scope DataDog/shopist-android --policy all.gitlab.pr)
-    - pip3 install GitPython requests
-    - python3 ./ci/scripts/dogfood.py -v $CI_COMMIT_TAG -t demo
-
-notify:dogfood-gradle-plugin:
-  tags: [ "arch:amd64" ]
-  interruptible: false
-  only:
-    - tags
-  image: $CI_IMAGE_DOCKER
-  id_tokens:
-    DDOCTOSTS_ID_TOKEN:
-      aud: dd-octo-sts
-  stage: notify
-  when: on_success
-  script:
-    - export GITHUB_TOKEN=$(dd-octo-sts token --scope DataDog/dd-sdk-android-gradle-plugin --policy all.gitlab.pr)
-    - pip3 install GitPython requests
-    - python3 ./ci/scripts/dogfood.py -v $CI_COMMIT_TAG -t gradle-plugin
 
 notify:merge-verification-metadata:
   tags: [ "arch:amd64" ]

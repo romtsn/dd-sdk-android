@@ -20,7 +20,6 @@ kotlinxSerialization = "1.6.3"
 okHttp = "4.12.1"
 
 # Android
-adapterDelegates = "4.3.2"
 androidDesugaringSdk = "2.0.4"
 androidToolsPlugin = "9.1.1"
 androidXAnnotations = "1.9.1"
@@ -70,7 +69,7 @@ kspTesting = "0.12.1"
 # Tools
 detekt = "2.0.0-alpha.6"
 dokka = "2.2.0"
-ktlint = "1.5.0"
+ktlint = "1.8.0"
 ktlintGradlePlugin = "14.2.0"
 unmock = "0.11.0"
 robolectric = "4.4_r1-robolectric-r2"
@@ -148,7 +147,6 @@ kronosNTP = { module = "com.lyft.kronos:kronos-android", version.ref = "kronosNT
 assertJ = { module = "org.assertj:assertj-core", version.ref = "assertJ" }
 
 # Android libs
-adapterDelegatesViewBinding = { module = "com.hannesdorfmann:adapterdelegates4-kotlin-dsl-viewbinding", version.ref = "adapterDelegates" }
 androidDesugaringSdk = { module = "com.android.tools:desugar_jdk_libs", version.ref = "androidDesugaringSdk" }
 androidXAnnotation = { module = "androidx.annotation:annotation", version.ref = "androidXAnnotations" }
 androidXAppCompat = { module = "androidx.appcompat:appcompat", version.ref = "androidXAppCompat" }

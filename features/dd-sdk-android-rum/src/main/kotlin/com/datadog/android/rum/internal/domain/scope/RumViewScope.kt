@@ -1573,6 +1573,7 @@ internal open class RumViewScope(
         insightsCollector.onLongTask(event.durationNs)
         val rumContext = getRumContext()
         val longTaskCustomAttributes = getCustomAttributes().toMutableMap().apply {
+            putAll(event.attributes)
             put(RumAttributes.LONG_TASK_TARGET, event.target)
         }
 
@@ -1849,7 +1850,7 @@ internal open class RumViewScope(
     }
 
     private fun logSynthetics(key: String, value: String) {
-        /**
+        /*
          * We use [Log] here instead of [InternalLogger] because we want to log regardless of the
          * verbosity level set using [com.datadog.android.Datadog.setVerbosity].
          */
@@ -1974,7 +1975,6 @@ internal open class RumViewScope(
                 as? ViewScopeInstrumentationType
         }
 
-        @Suppress("CommentOverPrivateFunction")
         /**
          * This function is used to inverse frame times metrics into frame rates.
          *
@@ -1985,6 +1985,7 @@ internal open class RumViewScope(
          *
          * As the frame times are reported in nanoseconds, we need to add a multiplier.
          */
+        @Suppress("CommentOverPrivateFunction")
         private fun VitalInfo.toInversePerformanceMetric(): ViewEvent.FlutterBuildTime {
             return ViewEvent.FlutterBuildTime(
                 min = invertValue(maxValue) * TimeUnit.SECONDS.toNanos(1),

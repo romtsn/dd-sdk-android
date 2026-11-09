@@ -644,9 +644,9 @@ internal class DatadogRumMonitor(
         )
     }
 
-    override fun addLongTask(durationNs: Long, target: String) {
+    override fun addLongTask(durationNs: Long, target: String, attributes: Map<String, Any?>) {
         handleEvent(
-            RumRawEvent.AddLongTask(durationNs, target, now())
+            RumRawEvent.AddLongTask(durationNs, target, now(), attributes.toMap())
         )
     }
 
@@ -941,7 +941,7 @@ internal class DatadogRumMonitor(
 
     override fun stop() {
         synchronized(rootScope) {
-            /**
+            /*
              * Stops the timeseries collector on the currently active session, if any.
              *
              * Must be called from [RumFeature.onStop] **before** [GlobalRumMonitor.unregister], so that
